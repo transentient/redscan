@@ -13,6 +13,7 @@ import (
 var user string = "dirty_owl"
 var ctx = context.Background()
 var limit = 100
+var total = 0
 
 type entry struct {
 	Id 			string	`json:id`
@@ -74,10 +75,10 @@ func scanPosts() (err error) {
 				Link: post.URL,
 				Body: post.Body,
 			}
-			fmt.Println(node.Created)
-			fmt.Println(node.Subreddit)
-			fmt.Println(node.Body)
-			fmt.Println()
+			//fmt.Println(node.Created)
+			//fmt.Println(node.Subreddit)
+			//fmt.Println(node.Body)
+			//fmt.Println()
 			entries[node.Created.String()] = node
 		}
 
@@ -107,6 +108,7 @@ func scanComments() (err error) {
 		count := 0
 		for _, comment := range comments {
 			count++
+			total++
 			last_reddit_comment_time = comment.Created.Time.Unix()
 			afterval = comment.FullID
 			node := entry {
@@ -119,8 +121,9 @@ func scanComments() (err error) {
 				Body: comment.Body,
 			}
 			fmt.Println(node.Created)
-			fmt.Println(node.Subreddit)
-			fmt.Println(node.Body)
+			fmt.Println(count, total)
+			//fmt.Println(node.Subreddit)
+			//fmt.Println(node.Body)
 			fmt.Println()
 			entries[node.Created.String()] = node
 		}
@@ -135,7 +138,7 @@ func scanComments() (err error) {
 func scanPushShift() (err error) {
 	fmt.Println("Pushshift Comments")
 	client := pushshift.NewClient("redscan/0.0.1")
-	q := &pushshift.CommentQuery{Author: user, After: int(last_reddit_comment_time)}
+	q := &pushshift.CommentQuery{Author: user, Before: int(last_reddit_comment_time), Size: limit}
 	comments, err := client.GetComments(q)
 
 	if err != nil {
@@ -143,6 +146,7 @@ func scanPushShift() (err error) {
 	}
 
 	for _, comment := range comments {
+		total++
 		node := entry {
 			Id: comment.ID,
 			Created: time.Unix(int64(comment.CreatedUtc), 0),
@@ -153,8 +157,9 @@ func scanPushShift() (err error) {
 			Body: comment.Body,
 		}
 		fmt.Println(node.Created)
-		fmt.Println(node.Subreddit)
-		fmt.Println(node.Body)
+		fmt.Println(total)
+		//fmt.Println(node.Subreddit)
+		//fmt.Println(node.Body)
 		fmt.Println()
 		entries[node.Created.String()] = node
 	}
