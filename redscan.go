@@ -8,9 +8,11 @@ import (
 	"github.com/vartanbeno/go-reddit/v2/reddit"
 	"github.com/mfdeux/pushshift/pushshift"
 	"time"
+	"flag"
 )
 
-var user string = "dirty_owl"
+var user string
+var last_reddit_comment_time int64
 var ctx = context.Background()
 var limit = 100
 var total = 0
@@ -26,15 +28,22 @@ type entry struct {
 } 
 
 var entries = make(map[string]entry)
-var last_reddit_comment_time int64
 
 func main() {
-	if err := scanPosts(); err != nil {
-		log.Fatal(err)
-	}
-	if err := scanComments(); err != nil {
-		log.Fatal(err)
-	}
+	flag.StringVar(&user, "user", "dirty_owl", "reddit username")
+	flag.Int64Var(&last_reddit_comment_time, "time", 0, "date to start scan")
+	flag.Parse()
+	fmt.Printf("Scanning for posts and comments for user %s, for time %d\n", user, last_reddit_comment_time)
+
+	if (last_reddit_comment_time == 0) {
+		if err := scanPosts(); err != nil {
+			log.Fatal(err)
+		}
+		if err := scanComments(); err != nil {
+			log.Fatal(err)
+		}
+	}	
+
 	if err := scanPushShift(); err != nil {
 		log.Fatal(err)
 	}
@@ -120,11 +129,11 @@ func scanComments() (err error) {
 				Link: comment.Permalink,
 				Body: comment.Body,
 			}
-			fmt.Println(node.Created)
-			fmt.Println(count, total)
+			//fmt.Println(node.Created)
+			//fmt.Println(count, total)
 			//fmt.Println(node.Subreddit)
 			//fmt.Println(node.Body)
-			fmt.Println()
+			//fmt.Println()
 			entries[node.Created.String()] = node
 		}
 
@@ -137,31 +146,45 @@ func scanComments() (err error) {
 
 func scanPushShift() (err error) {
 	fmt.Println("Pushshift Comments")
+	ps_size := 25
 	client := pushshift.NewClient("redscan/0.0.1")
-	q := &pushshift.CommentQuery{Author: user, Before: int(last_reddit_comment_time), Size: limit}
-	comments, err := client.GetComments(q)
+	
+	for {
+		q := &pushshift.CommentQuery{Author: user, Before: int(last_reddit_comment_time), Size: ps_size}
+		comments, err := client.GetComments(q)
 
-	if err != nil {
-		return err
-	}
-
-	for _, comment := range comments {
-		total++
-		node := entry {
-			Id: comment.ID,
-			Created: time.Unix(int64(comment.CreatedUtc), 0),
-			Author: comment.Author,
-			Subreddit: comment.Subreddit,
-			Score: comment.Score,
-			Link: comment.Permalink,
-			Body: comment.Body,
+		if err != nil {
+			//return err
+			fmt.Println(err)
 		}
-		fmt.Println(node.Created)
-		fmt.Println(total)
-		//fmt.Println(node.Subreddit)
-		//fmt.Println(node.Body)
-		fmt.Println()
-		entries[node.Created.String()] = node
+
+		count := 0
+		for _, comment := range comments {
+			count++
+			total++
+			last_reddit_comment_time = int64(comment.CreatedUtc)
+			node := entry {
+				Id: comment.ID,
+				Created: time.Unix(int64(comment.CreatedUtc), 0),
+				Author: comment.Author,
+				Subreddit: comment.Subreddit,
+				Score: comment.Score,
+				Link: comment.Permalink,
+				Body: comment.Body,
+			}
+			fmt.Println(node.Created)
+			fmt.Println(last_reddit_comment_time)
+			fmt.Println(total)
+			fmt.Println(node.Subreddit)
+			fmt.Println(node.Body)
+			fmt.Println()
+			entries[node.Created.String()] = node
+		}
+
+		if count < ps_size {
+			break
+		}
+		//time.Sleep(1 * time.Second)
 	}
 	return
 }
